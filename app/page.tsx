@@ -1,65 +1,110 @@
-import Image from "next/image";
+"use client";
+import * as d3 from "d3";
+import { useEffect, useRef } from "react";
+
+interface Event {
+  title: string;
+  year: number;
+}
 
 export default function Home() {
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
-  );
+  const svgRef = useRef<SVGSVGElement>(null);
+
+  useEffect(() => {
+    if (!svgRef.current) return;
+
+    const svg = d3.select<SVGSVGElement, unknown>(svgRef.current);
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    const margin = { bottom: 80 };
+
+    svg.attr("width", width).attr("height", height);
+
+    // Light background
+    svg
+      .append("rect")
+      .attr("width", width)
+      .attr("height", height)
+      .attr("fill", "#fafafa");
+
+    // Time scale
+    const xScale = d3.scaleLinear().domain([-3000, 2025]).range([0, width]);
+
+    // Axis
+    const xAxis = d3
+      .axisBottom(xScale)
+      .tickFormat((d: d3.NumberValue) => {
+        const year = d as number;
+        return year < 0 ? `${Math.abs(year)} BCE` : `${year} CE`;
+      })
+      .tickSize(0)
+      .tickPadding(12);
+
+    const g = svg.append("g");
+
+    // Axis container
+    const axisG = svg
+      .append("g")
+      .attr("transform", `translate(0, ${height - margin.bottom})`)
+      .call(xAxis);
+
+    // Style the axis
+    axisG.select(".domain").attr("stroke", "#e5e5e5");
+    axisG
+      .selectAll(".tick text")
+      .attr("fill", "#888")
+      .attr("font-size", "13px");
+
+    const testEvents: Event[] = [
+      { title: "Pyramids of Giza", year: -2560 },
+      { title: "Fall of Rome", year: 476 },
+      { title: "Battle of Hastings", year: 1066 },
+      { title: "French Revolution", year: 1789 },
+      { title: "World War II", year: 1939 },
+    ];
+
+    const circles = g
+      .selectAll<SVGCircleElement, Event>("circle")
+      .data(testEvents)
+      .enter()
+      .append("circle")
+      .attr("cx", (d: Event) => xScale(d.year))
+      .attr("cy", height / 2)
+      .attr("r", 8)
+      .attr("fill", "#6366f1")
+      .attr("cursor", "pointer");
+
+    const labels = g
+      .selectAll<SVGTextElement, Event>("text.label")
+      .data(testEvents)
+      .enter()
+      .append("text")
+      .attr("class", "label")
+      .attr("x", (d: Event) => xScale(d.year))
+      .attr("y", height / 2 - 16)
+      .attr("text-anchor", "middle")
+      .attr("fill", "#374151")
+      .attr("font-size", "13px")
+      .attr("font-family", "system-ui, sans-serif")
+      .text((d: Event) => d.title);
+
+    const zoom = d3
+      .zoom<SVGSVGElement, unknown>()
+      .scaleExtent([0.5, 100])
+      .on("zoom", (event: d3.D3ZoomEvent<SVGSVGElement, unknown>) => {
+        const newXScale = event.transform.rescaleX(xScale);
+        axisG.call(xAxis.scale(newXScale));
+        axisG.select(".domain").attr("stroke", "#e5e5e5");
+        axisG
+          .selectAll(".tick text")
+          .attr("fill", "#888")
+          .attr("font-size", "13px");
+        circles.attr("cx", (d: Event) => newXScale(d.year));
+        labels.attr("x", (d: Event) => newXScale(d.year));
+      });
+
+    svg.call(zoom);
+  }, []);
+
+  return <svg ref={svgRef}></svg>;
 }
