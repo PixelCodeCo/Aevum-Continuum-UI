@@ -41,22 +41,11 @@ export function Navbar() {
   return (
     <>
       <nav className="fixed top-0 left-0 right-0 z-50 h-14 bg-white/80 backdrop-blur-sm border-b border-neutral-200">
-        <div className="h-full max-w-7xl mx-auto px-4 flex items-center justify-between">
+      <div className="px-10">
+        <div className="h-full mx-auto flex items-center justify-between">
           <Link href="/" className="text-lg font-semibold text-neutral-800">
             Aevum Continuum
           </Link>
-
-          <div className="hidden md:flex items-center gap-6">
-            {NAV_LINKS.map((link) => (
-              <a
-                key={link.href}
-                href={link.href}
-                className="text-sm text-neutral-600 hover:text-neutral-900 transition-colors"
-              >
-                {link.label}
-              </a>
-            ))}
-          </div>
 
           <div className="flex items-center gap-3">
             <div className="hidden sm:flex items-center gap-2">
@@ -82,7 +71,20 @@ export function Navbar() {
               <Menu className="w-5 h-5" />
             </button>
           </div>
+
+          <div className="hidden md:flex items-center gap-6">
+            {NAV_LINKS.map((link) => (
+              <a
+                key={link.href}
+                href={link.href}
+                className="text-sm text-neutral-600 hover:text-neutral-900 transition-colors"
+              >
+                {link.label}
+              </a>
+            ))}
+          </div>
         </div>
+      </div>
       </nav>
 
       {isMenuOpen && (
