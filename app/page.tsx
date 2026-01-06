@@ -88,11 +88,23 @@ export default function Home() {
       .attr("font-family", "system-ui, sans-serif")
       .text((d: Event) => d.title);
 
+    const minYear = -300000;
+    const maxYear = 2500;
+
     const zoom = d3
       .zoom<SVGSVGElement, unknown>()
       .scaleExtent([0.5, 100])
       .on("zoom", (event: d3.D3ZoomEvent<SVGSVGElement, unknown>) => {
-        const newXScale = event.transform.rescaleX(xScale);
+        const { k, y } = event.transform;
+        let { x } = event.transform;
+
+        const minX = width - xScale(maxYear) * k;
+        const maxX = -xScale(minYear) * k;
+        x = Math.max(minX, Math.min(maxX, x));
+
+        const constrainedTransform = d3.zoomIdentity.translate(x, y).scale(k);
+        const newXScale = constrainedTransform.rescaleX(xScale);
+
         axisG.call(xAxis.scale(newXScale));
         axisG.select(".domain").attr("stroke", "#e5e5e5");
         axisG
