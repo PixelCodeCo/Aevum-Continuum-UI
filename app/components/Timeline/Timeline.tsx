@@ -13,7 +13,7 @@ export function Timeline({ events }: TimelineProps) {
   return (
     <div className="relative">
       <div className="sticky z-40 top-14 right-0">
-        <h1>arrow which will open </h1>
+        <h1>arrow which will open filters</h1>
       </div>
       <svg ref={svgRef} />
     </div>
