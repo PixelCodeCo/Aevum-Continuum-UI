@@ -33,13 +33,13 @@ export function useTimeline(events: TimelineEvent[]) {
     const g = svg.append("g");
     const axisG = renderAxis(svg, xAxis, height);
 
-    const circles = renderEventDots(g, events, xScale, height);
+    const eventsG = renderEvents(g, events, xScale, height);
     const labels = renderEventLabels(g, events, xScale, height);
 
     const periodsG = renderTimePeriods(svg, TIME_PERIODS, xScale, height);
     const lifespanG = renderLifespanIndicator(svg, xScale, height, width);
 
-    setupZoom(svg, xScale, xAxis, axisG, circles, labels, periodsG, lifespanG, width);
+    setupZoom(svg, xScale, xAxis, axisG, eventsG, labels, periodsG, lifespanG, width, events);
   }, [events]);
 
   return svgRef;
@@ -100,22 +100,81 @@ function styleAxis(
     .attr("font-size", "13px");
 }
 
-function renderEventDots(
+const EVENT_BAR_HEIGHT = 8;
+
+function isRangeEvent(event: TimelineEvent): boolean {
+  return event.endYear !== null && event.endYear !== event.year;
+}
+
+function getEventCenterX(event: TimelineEvent, xScale: d3.ScaleLinear<number, number>): number {
+  if (isRangeEvent(event)) {
+    return (xScale(event.year) + xScale(event.endYear!)) / 2;
+  }
+  return xScale(event.year);
+}
+
+function renderEvents(
   g: d3.Selection<SVGGElement, unknown, null, undefined>,
   events: TimelineEvent[],
   xScale: d3.ScaleLinear<number, number>,
   height: number
 ) {
-  return g
-    .selectAll<SVGCircleElement, TimelineEvent>("circle")
-    .data(events)
+  const eventsG = g.append("g").attr("class", "events");
+  const pointEvents = events.filter((e) => !isRangeEvent(e));
+  const rangeEvents = events.filter((e) => isRangeEvent(e));
+  const yPosition = height / 2;
+
+  // Render range events as bars
+  eventsG
+    .selectAll<SVGRectElement, TimelineEvent>("rect.event-bar")
+    .data(rangeEvents)
+    .enter()
+    .append("rect")
+    .attr("class", "event-bar")
+    .attr("x", (d) => xScale(d.year))
+    .attr("y", yPosition - EVENT_BAR_HEIGHT / 2)
+    .attr("width", (d) => Math.max(0, xScale(d.endYear!) - xScale(d.year)))
+    .attr("height", EVENT_BAR_HEIGHT)
+    .attr("fill", TIMELINE_CONFIG.colors.eventDot)
+    .attr("rx", EVENT_BAR_HEIGHT / 2)
+    .attr("cursor", "pointer");
+
+  // Render start/end markers for range events
+  eventsG
+    .selectAll<SVGCircleElement, TimelineEvent>("circle.event-start")
+    .data(rangeEvents)
     .enter()
     .append("circle")
+    .attr("class", "event-start")
     .attr("cx", (d) => xScale(d.year))
-    .attr("cy", height / 2)
+    .attr("cy", yPosition)
+    .attr("r", 5)
+    .attr("fill", TIMELINE_CONFIG.colors.eventDot);
+
+  eventsG
+    .selectAll<SVGCircleElement, TimelineEvent>("circle.event-end")
+    .data(rangeEvents)
+    .enter()
+    .append("circle")
+    .attr("class", "event-end")
+    .attr("cx", (d) => xScale(d.endYear!))
+    .attr("cy", yPosition)
+    .attr("r", 5)
+    .attr("fill", TIMELINE_CONFIG.colors.eventDot);
+
+  eventsG
+    .selectAll<SVGCircleElement, TimelineEvent>("circle.event-dot")
+    .data(pointEvents)
+    .enter()
+    .append("circle")
+    .attr("class", "event-dot")
+    .attr("cx", (d) => xScale(d.year))
+    .attr("cy", yPosition)
     .attr("r", 8)
     .attr("fill", TIMELINE_CONFIG.colors.eventDot)
     .attr("cursor", "pointer");
+
+  return eventsG;
 }
 
 function renderEventLabels(
@@ -130,7 +189,7 @@ function renderEventLabels(
     .enter()
     .append("text")
     .attr("class", "label")
-    .attr("x", (d) => xScale(d.year))
+    .attr("x", (d) => getEventCenterX(d, xScale))
     .attr("y", height / 2 - 16)
     .attr("text-anchor", "middle")
     .attr("fill", TIMELINE_CONFIG.colors.labelText)
@@ -274,7 +333,13 @@ function renderTimePeriods(
 }
 
 const MAX_TIERS = 3; // We have tiers 0, 1, 2
-const LIFESPAN_VIEWPORT_POSITION = 0.75; // Position at 75% from left of viewport
+
+function calculateLifespanWidth(xScale: d3.ScaleLinear<number, number>): number {
+  const domain = xScale.domain();
+  const range = xScale.range();
+  const pixelsPerYear = (range[1] - range[0]) / (domain[1] - domain[0]);
+  return Math.abs(pixelsPerYear * HUMAN_LIFESPAN_YEARS);
+}
 
 function renderLifespanIndicator(
   svg: d3.Selection<SVGSVGElement, unknown, null, undefined>,
@@ -286,10 +351,10 @@ function renderLifespanIndicator(
   const baseY = height - TIMELINE_MARGIN.bottom + PERIOD_BASE_Y_OFFSET;
   const yPosition = baseY + MAX_TIERS * (PERIOD_BAR_HEIGHT + PERIOD_TIER_GAP) + 8;
 
-  // Calculate lifespan width in pixels based on current scale
-  const lifespanWidth = Math.abs(xScale(HUMAN_LIFESPAN_YEARS) - xScale(0));
-  const startX = width * LIFESPAN_VIEWPORT_POSITION - lifespanWidth / 2;
-  const endX = startX + lifespanWidth;
+  const lifespanWidth = calculateLifespanWidth(xScale);
+  const centerX = width * 0.75;
+  const startX = centerX - lifespanWidth / 2;
+  const endX = centerX + lifespanWidth / 2;
 
   lifespanG
     .append("line")
@@ -337,13 +402,16 @@ function setupZoom(
   xScale: d3.ScaleLinear<number, number>,
   xAxis: d3.Axis<d3.NumberValue>,
   axisG: d3.Selection<SVGGElement, unknown, null, undefined>,
-  circles: d3.Selection<SVGCircleElement, TimelineEvent, SVGGElement, unknown>,
+  eventsG: d3.Selection<SVGGElement, unknown, null, undefined>,
   labels: d3.Selection<SVGTextElement, TimelineEvent, SVGGElement, unknown>,
   periodsG: d3.Selection<SVGGElement, unknown, null, undefined>,
   lifespanG: d3.Selection<SVGGElement, unknown, null, undefined>,
-  width: number
+  width: number,
+  events: TimelineEvent[]
 ) {
   const { minYear, maxYear, scaleExtent } = TIMELINE_CONFIG;
+  const pointEvents = events.filter((e) => !isRangeEvent(e));
+  const rangeEvents = events.filter((e) => isRangeEvent(e));
 
   const zoom = d3
     .zoom<SVGSVGElement, unknown>()
@@ -367,8 +435,29 @@ function setupZoom(
 
       axisG.call(xAxis.scale(newXScale));
       styleAxis(axisG);
-      circles.attr("cx", (d) => newXScale(d.year));
-      labels.attr("x", (d) => newXScale(d.year));
+
+      eventsG
+        .selectAll<SVGCircleElement, TimelineEvent>("circle.event-dot")
+        .data(pointEvents)
+        .attr("cx", (d) => newXScale(d.year));
+
+      eventsG
+        .selectAll<SVGRectElement, TimelineEvent>("rect.event-bar")
+        .data(rangeEvents)
+        .attr("x", (d) => newXScale(d.year))
+        .attr("width", (d) => Math.max(0, newXScale(d.endYear!) - newXScale(d.year)));
+
+      eventsG
+        .selectAll<SVGCircleElement, TimelineEvent>("circle.event-start")
+        .data(rangeEvents)
+        .attr("cx", (d) => newXScale(d.year));
+
+      eventsG
+        .selectAll<SVGCircleElement, TimelineEvent>("circle.event-end")
+        .data(rangeEvents)
+        .attr("cx", (d) => newXScale(d.endYear!));
+
+      labels.attr("x", (d) => getEventCenterX(d, newXScale));
 
       // Update time periods
       periodsG
@@ -384,10 +473,11 @@ function setupZoom(
           return getPeriodLabel(d, barWidth);
         });
 
-      // Stays at fixed viewport position, width scales with zoom
-      const lifespanWidth = Math.abs(newXScale(HUMAN_LIFESPAN_YEARS) - newXScale(0));
-      const startX = width * LIFESPAN_VIEWPORT_POSITION - lifespanWidth / 2;
-      const endX = startX + lifespanWidth;
+      // Calculate exact lifespan width at current zoom level
+      const lifespanWidth = calculateLifespanWidth(newXScale);
+      const centerX = width * 0.75;
+      const startX = centerX - lifespanWidth / 2;
+      const endX = centerX + lifespanWidth / 2;
 
       lifespanG
         .select(".lifespan-line")
