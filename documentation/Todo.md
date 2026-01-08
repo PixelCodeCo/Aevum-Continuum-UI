@@ -1,2 +1,3 @@
 - A human life timescale that stays to understand the actual quantity of time past
 - under dates actual names like middle ages modern history on a zoomed in bases
+- Calculate size of timeline with navbar addition
