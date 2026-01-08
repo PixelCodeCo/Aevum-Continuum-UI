@@ -33,7 +33,7 @@ export function useTimeline(events: TimelineEvent[]) {
     const g = svg.append("g");
     const axisG = renderAxis(svg, xAxis, height);
 
-    const eventsG = renderEvents(g, events, xScale, height);
+    const eventsG = renderEvents(svg, g, events, xScale, height);
     const labels = renderEventLabels(g, events, xScale, height);
 
     const periodsG = renderTimePeriods(svg, TIME_PERIODS, xScale, height);
@@ -113,7 +113,22 @@ function getEventCenterX(event: TimelineEvent, xScale: d3.ScaleLinear<number, nu
   return xScale(event.year);
 }
 
+function formatEventDate(event: TimelineEvent): string {
+  const startYear = event.year < 0
+    ? `${Math.abs(event.year).toLocaleString()} BCE`
+    : `${event.year} CE`;
+
+  if (event.endYear && event.endYear !== event.year) {
+    const endYear = event.endYear < 0
+      ? `${Math.abs(event.endYear).toLocaleString()} BCE`
+      : `${event.endYear} CE`;
+    return `${startYear} — ${endYear}`;
+  }
+  return startYear;
+}
+
 function renderEvents(
+  svg: d3.Selection<SVGSVGElement, unknown, null, undefined>,
   g: d3.Selection<SVGGElement, unknown, null, undefined>,
   events: TimelineEvent[],
   xScale: d3.ScaleLinear<number, number>,
@@ -123,6 +138,90 @@ function renderEvents(
   const pointEvents = events.filter((e) => !isRangeEvent(e));
   const rangeEvents = events.filter((e) => isRangeEvent(e));
   const yPosition = height / 2;
+
+  // Create tooltip
+  const tooltip = svg.append("g")
+    .attr("class", "event-tooltip")
+    .attr("visibility", "hidden")
+    .attr("pointer-events", "none");
+
+  tooltip.append("rect")
+    .attr("class", "tooltip-bg")
+    .attr("fill", "#1f2937")
+    .attr("rx", 6)
+    .attr("ry", 6);
+
+  tooltip.append("text")
+    .attr("class", "tooltip-title")
+    .attr("fill", "#fff")
+    .attr("font-size", "12px")
+    .attr("font-weight", "600")
+    .attr("font-family", "system-ui, sans-serif");
+
+  tooltip.append("text")
+    .attr("class", "tooltip-date")
+    .attr("fill", "#9ca3af")
+    .attr("font-size", "11px")
+    .attr("font-family", "system-ui, sans-serif");
+
+  tooltip.append("text")
+    .attr("class", "tooltip-summary")
+    .attr("fill", "#d1d5db")
+    .attr("font-size", "11px")
+    .attr("font-family", "system-ui, sans-serif");
+
+  const showTooltip = (event: MouseEvent, d: TimelineEvent) => {
+    const titleText = tooltip.select(".tooltip-title").text(d.title);
+    const dateText = tooltip.select(".tooltip-date").text(formatEventDate(d));
+    const summaryText = tooltip.select(".tooltip-summary")
+      .text(d.summary ? (d.summary.length > 60 ? d.summary.slice(0, 60) + "..." : d.summary) : "");
+
+    const titleBox = (titleText.node() as SVGTextElement).getBBox();
+    const dateBox = (dateText.node() as SVGTextElement).getBBox();
+    const summaryBox = d.summary ? (summaryText.node() as SVGTextElement).getBBox() : { width: 0, height: 0 };
+
+    const padding = 10;
+    const lineSpacing = 4;
+    const bgWidth = Math.max(titleBox.width, dateBox.width, summaryBox.width) + padding * 2;
+    const bgHeight = titleBox.height + dateBox.height + (d.summary ? summaryBox.height + lineSpacing : 0) + padding * 2 + lineSpacing;
+
+    const [mx, my] = d3.pointer(event, svg.node());
+    const tooltipX = mx - bgWidth / 2;
+    const tooltipY = my - bgHeight - 12;
+
+    tooltip
+      .attr("transform", `translate(${tooltipX}, ${tooltipY})`)
+      .attr("visibility", "visible");
+
+    tooltip.select(".tooltip-bg")
+      .attr("width", bgWidth)
+      .attr("height", bgHeight);
+
+    tooltip.select(".tooltip-title")
+      .attr("x", padding)
+      .attr("y", padding + titleBox.height - 2);
+
+    tooltip.select(".tooltip-date")
+      .attr("x", padding)
+      .attr("y", padding + titleBox.height + dateBox.height + lineSpacing);
+
+    if (d.summary) {
+      tooltip.select(".tooltip-summary")
+        .attr("x", padding)
+        .attr("y", padding + titleBox.height + dateBox.height + summaryBox.height + lineSpacing * 2);
+    }
+  };
+
+  const moveTooltip = (event: MouseEvent) => {
+    const [mx, my] = d3.pointer(event, svg.node());
+    const bgWidth = (tooltip.select(".tooltip-bg").node() as SVGRectElement).getBBox().width;
+    const bgHeight = (tooltip.select(".tooltip-bg").node() as SVGRectElement).getBBox().height;
+    tooltip.attr("transform", `translate(${mx - bgWidth / 2}, ${my - bgHeight - 12})`);
+  };
+
+  const hideTooltip = () => {
+    tooltip.attr("visibility", "hidden");
+  };
 
   // Render range events as bars
   eventsG
@@ -137,7 +236,16 @@ function renderEvents(
     .attr("height", EVENT_BAR_HEIGHT)
     .attr("fill", TIMELINE_CONFIG.colors.eventDot)
     .attr("rx", EVENT_BAR_HEIGHT / 2)
-    .attr("cursor", "pointer");
+    .attr("cursor", "pointer")
+    .on("mouseenter", function(event: MouseEvent, d: TimelineEvent) {
+      d3.select(this).attr("opacity", 0.8);
+      showTooltip(event, d);
+    })
+    .on("mousemove", moveTooltip)
+    .on("mouseleave", function() {
+      d3.select(this).attr("opacity", 1);
+      hideTooltip();
+    });
 
   // Render start/end markers for range events
   eventsG
@@ -162,6 +270,7 @@ function renderEvents(
     .attr("r", 5)
     .attr("fill", TIMELINE_CONFIG.colors.eventDot);
 
+  // Render point events as dots
   eventsG
     .selectAll<SVGCircleElement, TimelineEvent>("circle.event-dot")
     .data(pointEvents)
@@ -172,7 +281,16 @@ function renderEvents(
     .attr("cy", yPosition)
     .attr("r", 8)
     .attr("fill", TIMELINE_CONFIG.colors.eventDot)
-    .attr("cursor", "pointer");
+    .attr("cursor", "pointer")
+    .on("mouseenter", function(event: MouseEvent, d: TimelineEvent) {
+      d3.select(this).attr("r", 10);
+      showTooltip(event, d);
+    })
+    .on("mousemove", moveTooltip)
+    .on("mouseleave", function() {
+      d3.select(this).attr("r", 8);
+      hideTooltip();
+    });
 
   return eventsG;
 }
