@@ -19,3 +19,12 @@ export interface TimelineConfig {
     labelText: string;
   };
 }
+
+export interface TimePeriod {
+  name: string;
+  shortName: string;
+  startYear: number;
+  endYear: number;
+  color: string;
+  tier: number;
+}
