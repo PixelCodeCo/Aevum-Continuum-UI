@@ -1,11 +1,12 @@
 import { Timeline } from "@/app/components/Timeline";
-import { SAMPLE_EVENTS } from "@/app/constants/timeline";
+import { fetchEvents } from "@/app/lib/events";
 
-export default function Home() {
+export default async function Home() {
+  const events = await fetchEvents();
+
   return (
     <div className="relative overflow-hidden">
-      <Timeline events={SAMPLE_EVENTS} />
-      {/* <Footer /> */}
+      <Timeline events={events} />
     </div>
   );
 }

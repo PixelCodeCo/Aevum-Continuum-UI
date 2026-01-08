@@ -1,6 +1,11 @@
 export interface TimelineEvent {
+  id: string;
   title: string;
+  summary: string | null;
   year: number;
+  endYear: number | null;
+  importance: number;
+  scope: string;
 }
 
 export interface TimelineMargin {

@@ -1,4 +1,4 @@
-import type { TimelineConfig, TimelineEvent, TimePeriod } from "@/app/types/timeline";
+import type { TimelineConfig, TimePeriod } from "@/app/types/timeline";
 
 export const TIMELINE_CONFIG: TimelineConfig = {
   minYear: -300000,
@@ -21,14 +21,6 @@ export const INITIAL_YEAR_RANGE = {
   start: -3000,
   end: 2025,
 } as const;
-
-export const SAMPLE_EVENTS: TimelineEvent[] = [
-  { title: "Pyramids of Giza", year: -2560 },
-  { title: "Fall of Rome", year: 476 },
-  { title: "Battle of Hastings", year: 1066 },
-  { title: "French Revolution", year: 1789 },
-  { title: "World War II", year: 1939 },
-];
 
 // Tier 0: Main sequential ages (no overlap, covers all of history)
 // Tier 1: Cultural/political movements (overlay on tier 0)
