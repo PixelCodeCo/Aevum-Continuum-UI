@@ -19,7 +19,7 @@ export function useTimeline(events: TimelineEvent[]) {
     const svg = d3.select<SVGSVGElement, unknown>(svgRef.current);
     svg.selectAll("*").remove();
     const width = window.innerWidth;
-    const height = window.innerHeight;
+    const height = window.innerHeight - 100;
 
     svg.attr("width", width).attr("height", height);
 
