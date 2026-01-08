@@ -151,6 +151,11 @@ function getPeriodLabel(period: TimePeriod, barWidth: number): string {
   return period.name;
 }
 
+function formatYearForTooltip(year: number): string {
+  if (year < 0) return `${Math.abs(year).toLocaleString()} BCE`;
+  return `${year} CE`;
+}
+
 function getTierYPosition(tier: number, baseY: number): number {
   return baseY + tier * (PERIOD_BAR_HEIGHT + PERIOD_TIER_GAP);
 }
@@ -164,6 +169,31 @@ function renderTimePeriods(
   const periodsG = svg.append("g").attr("class", "time-periods");
   const baseY = height - TIMELINE_MARGIN.bottom + PERIOD_BASE_Y_OFFSET;
 
+  // Create tooltip group (hidden by default)
+  const tooltip = svg.append("g")
+    .attr("class", "period-tooltip")
+    .attr("visibility", "hidden")
+    .attr("pointer-events", "none");
+
+  tooltip.append("rect")
+    .attr("class", "tooltip-bg")
+    .attr("fill", "#1f2937")
+    .attr("rx", 4)
+    .attr("ry", 4);
+
+  tooltip.append("text")
+    .attr("class", "tooltip-name")
+    .attr("fill", "#fff")
+    .attr("font-size", "11px")
+    .attr("font-weight", "600")
+    .attr("font-family", "system-ui, sans-serif");
+
+  tooltip.append("text")
+    .attr("class", "tooltip-dates")
+    .attr("fill", "#9ca3af")
+    .attr("font-size", "10px")
+    .attr("font-family", "system-ui, sans-serif");
+
   periodsG
     .selectAll<SVGRectElement, TimePeriod>("rect")
     .data(periods)
@@ -175,7 +205,51 @@ function renderTimePeriods(
     .attr("height", PERIOD_BAR_HEIGHT)
     .attr("fill", (d) => d.color)
     .attr("opacity", 0.85)
-    .attr("rx", 2);
+    .attr("rx", 2)
+    .attr("cursor", "pointer")
+    .on("mouseenter", function (event: MouseEvent, d: TimePeriod) {
+      d3.select(this).attr("opacity", 1);
+
+      const nameText = tooltip.select(".tooltip-name").text(d.name);
+      const datesText = tooltip.select(".tooltip-dates")
+        .text(`${formatYearForTooltip(d.startYear)} — ${formatYearForTooltip(d.endYear)}`);
+
+      const nameBox = (nameText.node() as SVGTextElement).getBBox();
+      const datesBox = (datesText.node() as SVGTextElement).getBBox();
+      const padding = 8;
+      const bgWidth = Math.max(nameBox.width, datesBox.width) + padding * 2;
+      const bgHeight = nameBox.height + datesBox.height + padding * 2 + 2;
+
+      const [mx, my] = d3.pointer(event, svg.node());
+      const tooltipX = mx - bgWidth / 2;
+      const tooltipY = my - bgHeight - 8;
+
+      tooltip
+        .attr("transform", `translate(${tooltipX}, ${tooltipY})`)
+        .attr("visibility", "visible");
+
+      tooltip.select(".tooltip-bg")
+        .attr("width", bgWidth)
+        .attr("height", bgHeight);
+
+      tooltip.select(".tooltip-name")
+        .attr("x", padding)
+        .attr("y", padding + nameBox.height - 2);
+
+      tooltip.select(".tooltip-dates")
+        .attr("x", padding)
+        .attr("y", padding + nameBox.height + datesBox.height + 2);
+    })
+    .on("mousemove", function (event: MouseEvent) {
+      const [mx, my] = d3.pointer(event, svg.node());
+      const bgWidth = (tooltip.select(".tooltip-bg").node() as SVGRectElement).getBBox().width;
+      const bgHeight = (tooltip.select(".tooltip-bg").node() as SVGRectElement).getBBox().height;
+      tooltip.attr("transform", `translate(${mx - bgWidth / 2}, ${my - bgHeight - 8})`);
+    })
+    .on("mouseleave", function () {
+      d3.select(this).attr("opacity", 0.85);
+      tooltip.attr("visibility", "hidden");
+    });
 
   periodsG
     .selectAll<SVGTextElement, TimePeriod>("text")
