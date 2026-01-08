@@ -37,7 +37,7 @@ export function useTimeline(events: TimelineEvent[]) {
     const labels = renderEventLabels(g, events, xScale, height);
 
     const periodsG = renderTimePeriods(svg, TIME_PERIODS, xScale, height);
-    const lifespanG = renderLifespanIndicator(svg, xScale, height);
+    const lifespanG = renderLifespanIndicator(svg, xScale, height, width);
 
     setupZoom(svg, xScale, xAxis, axisG, circles, labels, periodsG, lifespanG, width);
   }, [events]);
@@ -274,23 +274,28 @@ function renderTimePeriods(
 }
 
 const MAX_TIERS = 3; // We have tiers 0, 1, 2
+const LIFESPAN_VIEWPORT_POSITION = 0.75; // Position at 75% from left of viewport
 
 function renderLifespanIndicator(
   svg: d3.Selection<SVGSVGElement, unknown, null, undefined>,
   xScale: d3.ScaleLinear<number, number>,
-  height: number
+  height: number,
+  width: number
 ) {
   const lifespanG = svg.append("g").attr("class", "lifespan-indicator");
   const baseY = height - TIMELINE_MARGIN.bottom + PERIOD_BASE_Y_OFFSET;
   const yPosition = baseY + MAX_TIERS * (PERIOD_BAR_HEIGHT + PERIOD_TIER_GAP) + 8;
-  const startYear = 2000;
-  const endYear = startYear + HUMAN_LIFESPAN_YEARS;
+
+  // Calculate lifespan width in pixels based on current scale
+  const lifespanWidth = Math.abs(xScale(HUMAN_LIFESPAN_YEARS) - xScale(0));
+  const startX = width * LIFESPAN_VIEWPORT_POSITION - lifespanWidth / 2;
+  const endX = startX + lifespanWidth;
 
   lifespanG
     .append("line")
     .attr("class", "lifespan-line")
-    .attr("x1", xScale(startYear))
-    .attr("x2", xScale(endYear))
+    .attr("x1", startX)
+    .attr("x2", endX)
     .attr("y1", yPosition)
     .attr("y2", yPosition)
     .attr("stroke", "#ef4444")
@@ -300,7 +305,7 @@ function renderLifespanIndicator(
   lifespanG
     .append("circle")
     .attr("class", "lifespan-start")
-    .attr("cx", xScale(startYear))
+    .attr("cx", startX)
     .attr("cy", yPosition)
     .attr("r", 4)
     .attr("fill", "#ef4444");
@@ -308,7 +313,7 @@ function renderLifespanIndicator(
   lifespanG
     .append("circle")
     .attr("class", "lifespan-end")
-    .attr("cx", xScale(endYear))
+    .attr("cx", endX)
     .attr("cy", yPosition)
     .attr("r", 4)
     .attr("fill", "#ef4444");
@@ -316,7 +321,7 @@ function renderLifespanIndicator(
   lifespanG
     .append("text")
     .attr("class", "lifespan-label")
-    .attr("x", xScale(startYear) - 10)
+    .attr("x", startX - 10)
     .attr("y", yPosition + 4)
     .attr("text-anchor", "end")
     .attr("fill", "#ef4444")
@@ -339,8 +344,6 @@ function setupZoom(
   width: number
 ) {
   const { minYear, maxYear, scaleExtent } = TIMELINE_CONFIG;
-  const lifespanStart = 2000;
-  const lifespanEnd = lifespanStart + HUMAN_LIFESPAN_YEARS;
 
   const zoom = d3
     .zoom<SVGSVGElement, unknown>()
@@ -381,15 +384,19 @@ function setupZoom(
           return getPeriodLabel(d, barWidth);
         });
 
-      // Update lifespan indicator
+      // Stays at fixed viewport position, width scales with zoom
+      const lifespanWidth = Math.abs(newXScale(HUMAN_LIFESPAN_YEARS) - newXScale(0));
+      const startX = width * LIFESPAN_VIEWPORT_POSITION - lifespanWidth / 2;
+      const endX = startX + lifespanWidth;
+
       lifespanG
         .select(".lifespan-line")
-        .attr("x1", newXScale(lifespanStart))
-        .attr("x2", newXScale(lifespanEnd));
+        .attr("x1", startX)
+        .attr("x2", endX);
 
-      lifespanG.select(".lifespan-start").attr("cx", newXScale(lifespanStart));
-      lifespanG.select(".lifespan-end").attr("cx", newXScale(lifespanEnd));
-      lifespanG.select(".lifespan-label").attr("x", newXScale(lifespanStart) - 10);
+      lifespanG.select(".lifespan-start").attr("cx", startX);
+      lifespanG.select(".lifespan-end").attr("cx", endX);
+      lifespanG.select(".lifespan-label").attr("x", startX - 10);
     });
 
   svg.call(zoom);
